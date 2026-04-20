@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>EST Test</title>
+</head>
+<body>
+
+<h2>Entrepreneurship Skill Test</h2>
+
+<!-- ================= SECTION 1 ================= -->
+<h3>Section 1: Sentence Completion</h3>
+<div id="mcq"></div>
+
+<script>
+const questions = [
+    { q: "1. Success in business mainly depends on:", options: ["Luck","Hard Work","Contacts","Government","None"] },
+    { q: "2. Profit in business is:", options: ["Bad","Necessary","Optional","Irrelevant","Unethical"] },
+    { q: "3. Innovation is:", options: ["Waste","Important","Risky","Unneeded","Optional"] },
+    { q: "4. Time management means:", options: ["Ignoring time","Planning work","Delaying","Random work","Sleeping"] },
+    { q: "5. Failure should be:", options: ["Avoided","Learned from","Ignored","Feared","Hidden"] },
+    { q: "6. Business growth depends on:", options: ["Luck","Effort","Chance","Others","None"] },
+    { q: "7. Decision making should be:", options: ["Delayed","Quick & smart","Avoided","Random","Emotional"] },
+    { q: "8. Risk in business is:", options: ["Bad","Necessary","Avoidable","Optional","Useless"] },
+    { q: "9. Entrepreneurs should:", options: ["Wait","Act","Delay","Follow","Ignore"] },
+    { q: "10. Competition means:", options: ["Fear","Growth","Loss","Problem","None"] },
+    { q: "11. Success requires:", options: ["Luck","Planning","Avoidance","Waiting","None"] }
+];
+
+let html = "";
+questions.forEach((item, index) => {
+    html += `<p>${item.q}</p><select id="q${index+1}">`;
+    item.options.forEach((opt, i) => {
+        html += `<option value="${String.fromCharCode(97+i)}">${opt}</option>`;
+    });
+    html += `</select>`;
+});
+document.getElementById("mcq").innerHTML = html;
+</script>
+
+<!-- ================= SECTION 2 ================= -->
+<h3>Section 2: Paired Comparison</h3>
+<div id="paired"></div>
+
+<script>
+const pairedQuestions = [
+    {q:"1.", A:"Work has to be done, so I try to do it better.", B:"I keep good company to get my work done."},
+    {q:"2.", A:"I feel happier when responsibility increases.", B:"I settle first then act."},
+    {q:"3.", A:"Avoid losses always.", B:"Understanding earning is first step."},
+    {q:"4.", A:"Avoid risk of failure.", B:"Maintain people's trust."},
+    {q:"5.", A:"Strive to progress.", B:"Do what feels secure."},
+    {q:"6.", A:"People ridicule failure.", B:"Take advice when needed."},
+    {q:"7.", A:"Solve problems actively.", B:"Stick to current work."},
+    {q:"8.", A:"Trust own thoughts.", B:"I can do better."},
+    {q:"9.", A:"Maintain relationships.", B:"Learn from experience."},
+    {q:"10.", A:"Learn from failure.", B:"Prefer comfort."},
+    {q:"11.", A:"Depend on luck.", B:"Find reasons of failure."},
+    {q:"12.", A:"Employees are friends.", B:"Switch for better work."},
+    {q:"13.", A:"Think before action.", B:"Sacrifice for others."},
+    {q:"14.", A:"Need capital first.", B:"Take own decisions."},
+    {q:"15.", A:"Maintain trust.", B:"Find alternatives."},
+    {q:"16.", A:"Avoid mistakes.", B:"Enjoy socializing."},
+    {q:"17.", A:"Keep money safe.", B:"Trust own work."},
+    {q:"18.", A:"Want comfort money.", B:"Need help in decisions."},
+    {q:"19.", A:"Support relatives.", B:"Enjoy solving problems."},
+    {q:"20.", A:"Avoid hurting others.", B:"Money is key."},
+    {q:"21.", A:"Grow fast.", B:"Avoid blame."},
+    {q:"22.", A:"Act independently.", B:"Money = happiness."},
+    {q:"23.", A:"Blame others.", B:"Do what feels right."},
+    {q:"24.", A:"Protect reputation.", B:"Want luxury."},
+    {q:"25.", A:"Comfortable house.", B:"Learn from failure."},
+    {q:"26.", A:"Think long-term.", B:"Control everything."},
+    {q:"27.", A:"Money is main goal.", B:"Enjoy social work."},
+    {q:"28.", A:"Ignore criticism.", B:"Feel bad on failure."},
+    {q:"29.", A:"Avoid difficulties.", B:"Take advice."},
+    {q:"30.", A:"Learn from experience.", B:"Want money."},
+    {q:"31.", A:"Prefer easy life.", B:"Analyze failure."},
+    {q:"32.", A:"Avoid interference.", B:"Do anything for money."}
+];
+
+let pairedHTML = "";
+pairedQuestions.forEach((item, index) => {
+    pairedHTML += `
+        <p>${item.q}</p>
+        <select id="p${index+1}">
+            <option value="A">A) ${item.A}</option>
+            <option value="B">B) ${item.B}</option>
+        </select>
+    `;
+});
+document.getElementById("paired").innerHTML = pairedHTML;
+</script>
+
+<!-- ================= SECTION 3 ================= -->
+<h3>Section 3: Image Imagination</h3>
+<div id="images"></div>
+
+<script>
+let imgHTML = "";
+for(let i=1;i<=6;i++){
+    imgHTML += `
+        <img src="images/img${i}.jpg" width="300"><br>
+        <textarea id="img${i}" placeholder="Write your story..."></textarea><br><br>
+    `;
+}
+document.getElementById("images").innerHTML = imgHTML;
+</script>
+
+<!-- ================= SECTION 4 ================= -->
+<h3>Section 4: Who Am I?</h3>
+<textarea id="who" rows="6" cols="50"></textarea>
+
+<br><br>
+<button onclick="submitTest()">Submit Test</button>
+
+<script>
+function submitTest(){
+
+    let user = JSON.parse(localStorage.getItem("user") || '{"id":1}');
+
+    let section1 = [];
+    for(let i=1;i<=11;i++){
+        section1.push(document.getElementById("q"+i).value);
+    }
+
+    let section2 = [];
+    for(let i=1;i<=32;i++){
+        section2.push(document.getElementById("p"+i).value);
+    }
+
+    let images = [];
+    for(let i=1;i<=6;i++){
+        images.push(document.getElementById("img"+i).value);
+    }
+
+    let who = document.getElementById("who").value;
+
+    fetch("https://est-jjw7.onrender.com", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            user_id: user.id,
+            section1: section1,
+            section2: section2,
+            images: images,
+            who_am_i: who
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert("Total Score: " + data.total);
+        console.log(data);
+    })
+    .catch(err => {
+        alert("Error submitting test");
+        console.error(err);
+    });
+}
+</script>
+
+</body>
+</html>});
+
+document.getElementById("mcq").innerHTML = html;
+</script>
+
+<!-- ================= SECTION 2 ================= -->
+<h3>Section 2: Paired Comparison</h3>
+<div id="paired"></div>
+
+<script>
+const pairedQuestions = [
+  [
+  {
+    "q": "1. Choose between A or B:",
+    "options": ["A) Work has to be done, so I try to do it better. [cite: 321]", "B) I keep the company of good and deserving friends so that I can get my work done. [cite: 322]"]
+  },
+  {
+    "q": "2. Choose between A or B:",
+    "options": ["A) I feel happier when the responsibility increases. [cite: 323]", "B) I will get settled in the right place, then let anything happen. [cite: 324]"]
+  },
+  {
+    "q": "3. Choose between A or B:",
+    "options": ["A) I shall never do anything that would possibly lead me to a loss. [cite: 325]", "B) The understanding of how to earn money is the first step in business. [cite: 326]"]
+  },
+  {
+    "q": "4. Choose between A or B:",
+    "options": ["A) I shall not venture into anything, however good, if its failure would lead to my being ridiculed. [cite: 327]", "B) I shall keep in mind people's good faith in me, in addition to my work. [cite: 328]"]
+  },
+  {
+    "q": "5. Choose between A or B:",
+    "options": ["A) I shall strive to progress in any business that I start. [cite: 329]", "B) I shall undertake those actions which would make me happy and secured [cite: 330]"]
+  },
+  {
+    "q": "6. Choose between A or B:",
+    "options": ["A) People will ridicule me if I fail. [cite: 331]", "B) I would need the advice of others though I have confidence in myself. [cite: 332]"]
+  },
+  {
+    "q": "7. Choose between A or B:",
+    "options": ["A) I shall find the solution for the difficulties as and when they come. [cite: 333]", "B) If I fail in the new venture, I shall continue my present work. [cite: 334]"]
+  },
+  {
+    "q": "8. Choose between A or B:",
+    "options": ["A) I go with a good thought; I feel it would be correct. [cite: 335]", "B) I can do better than what I am doing at present. [cite: 336]"]
+  },
+  {
+    "q": "9. Choose between A or B:",
+    "options": ["A) While working, I shall keep in mind that personal relationships are not strained. [cite: 337]", "B) Whatever may happen, I shall have a chance to learn from experience. [cite: 338]"]
+  },
+  {
+    "q": "10. Choose between A or B:",
+    "options": ["A) Even if I fail in my effort, I shall learn from something. [cite: 339]", "B) I like a nice and comfortable life. [cite: 340]"]
+  },
+  {
+    "q": "11. Choose between A or B:",
+    "options": ["A) I shall invest only in races, lottery, and someday luck will be in my favor. [cite: 341]", "B) I will try to find out the reason if I fail in my work. [cite: 342]"]
+  },
+  {
+    "q": "12. Choose between A or B:",
+    "options": ["A) I will consider my employees as friends and will behave with them in the same manner. [cite: 343]", "B) If I get better work, then I shall leave my present work. [cite: 344]"]
+  },
+  {
+    "q": "13. Choose between A or B:",
+    "options": ["A) I shall think properly before I implement a new thing. [cite: 345]", "B) I would not mind if my work suffers for the betterment of others. [cite: 346]"]
+  },
+  {
+    "q": "14. Choose between A or B:",
+    "options": ["A) I will be able to develop business only if I have capital. [cite: 347]", "B) I wish that I can take important decisions on my own. [cite: 348]"]
+  },
+  {
+    "q": "15. Choose between A or B:",
+    "options": ["A) I will not act indifferently by which somebody's good feeling and trust is betrayed. [cite: 349]", "B) If things do not materialize according to my wish; I shall find out another alternative. [cite: 350]"]
+  },
+  {
+    "q": "16. Choose between A or B:",
+    "options": ["A) I shall avoid making mistakes. [cite: 351]", "B) I like to talk with friends very much. [cite: 352]"]
+  },
+  {
+    "q": "17. Choose between A or B:",
+    "options": ["A) I wish that my money should be safely kept in the bank. [cite: 353]", "B) I have full trust in my work and I am aware of its pros and cons. [cite: 354]"]
+  },
+  {
+    "q": "18. Choose between A or B:",
+    "options": ["A) I wish I should have a lot of money so that I can live comfortably. [cite: 355]", "B) I wish to get somebody's help in making my decisions. [cite: 356]"]
+  },
+  {
+    "q": "19. Choose between A or B:",
+    "options": ["A) One should see first to his own relatives and known persons. [cite: 357]", "B) I enjoy solving the difficulties. [cite: 358]"]
+  },
+  {
+    "q": "20. Choose between A or B:",
+    "options": ["A) Even if I have to suffer, I will not behave in a way that others feel bad. [cite: 359]", "B) For advancement of business, money is a must. [cite: 360]"]
+  },
+  {
+    "q": "21. Choose between A or B:",
+    "options": ["A) I wish that my business should flourish quickly so that I do not have financial problems. [cite: 361]", "B) I shall be careful to see that I am not blamed for being unsuccessful. [cite: 362]"]
+  },
+  {
+    "q": "22. Choose between A or B:",
+    "options": ["A) I should be allowed to act independently as per my thought. [cite: 363]", "B) My happiness lies only in collecting a large amount for my future. [cite: 364]"]
+  },
+  {
+    "q": "23. Choose between A or B:",
+    "options": ["A) If I fail, it will be mainly due to somebody else's faults. [cite: 365]", "B) I will only do things which I feel are good and satisfactory. [cite: 366]"]
+  },
+  {
+    "q": "24. Choose between A or B:",
+    "options": ["A) Before taking up work, I will be careful to see that it will not harm my reputation in society. [cite: 367]", "B) I wish that like others, I should also have good and costly items. [cite: 369]"]
+  },
+  {
+    "q": "25. Choose between A or B:",
+    "options": ["A) I wish that there should be a comfortable house to live in. [cite: 370]", "B) I will learn from failures. [cite: 371]"]
+  },
+  {
+    "q": "26. Choose between A or B:",
+    "options": ["A) Before doing any work, I think for the long term. [cite: 372]", "B) I wish everything happens according to my instructions. [cite: 373]"]
+  },
+  {
+    "q": "27. Choose between A or B:",
+    "options": ["A) Money brings all comforts, so my main aim is to collect money. [cite: 374]", "B) I like work in which all friends meet frequently. [cite: 375]"]
+  },
+  {
+    "q": "28. Choose between A or B:",
+    "options": ["A) I know what I am doing and will not be afraid of others' criticism. [cite: 376]", "B) I feel very bad about myself if I fail. [cite: 377]"]
+  },
+  {
+    "q": "29. Choose between A or B:",
+    "options": ["A) I am fed up with frequently arriving difficulties. I should get some good new work. [cite: 378]", "B) Before starting new work, I will take advice from friends. [cite: 379]"]
+  },
+  {
+    "q": "30. Choose between A or B:",
+    "options": ["A) All my experiences will motivate me. [cite: 380]", "B) I wish that I should have a lot of money. [cite: 381]"]
+  },
+  {
+    "q": "31. Choose between A or B:",
+    "options": ["A) I like to spend my days leisurely, successfully, and without any worries. [cite: 382]", "B) If I fail, I will think about why it happened. [cite: 383]"]
+  },
+  {
+    "q": "32. Choose between A or B:",
+    "options": ["A) I do not like others' interference in whatever I do. [cite: 384]", "B) I will do anything to earn money. [cite: 385]"]
+  }
+]
+];
+
+let pairedHTML = "";
+
+pairedQuestions.forEach((item, index) => {
+    pairedHTML += `
+        <p>${item.q}</p>
+        <select id="p${index+1}">
+            <option value="A">A) ${item.A}</option>
+            <option value="B">B) ${item.B}</option>
+        </select>
+    `;
+});
+
+document.getElementById("paired").innerHTML = pairedHTML;
+</script>
+
+<!-- ================= SECTION 3 ================= -->
+<h3>Section 3: Image Imagination</h3>
+
+<div id="images"></div>
+
+<script>
+let imgHTML = "";
+
+for(let i=1;i<=6;i++){
+    imgHTML += `
+        <img src="http://localhost:5000/static/img${i}.jpg" width="300"><br>
+        <textarea id="img${i}" placeholder="Write your story..."></textarea><br><br>
+    `;
+}
+
+document.getElementById("images").innerHTML = imgHTML;
+</script>
+
+<!-- ================= SECTION 4 ================= -->
+<h3>Section 4: Who Am I?</h3>
+<textarea id="who" rows="6" cols="50"></textarea>
+
+<br><br>
+<button onclick="submitTest()">Submit Test</button>
+
+<script>
+function submitTest(){
+    let user = JSON.parse(localStorage.getItem("user"))
+
+    let section1 = []
+    for(let i=1;i<=11;i++){
+        section1.push(document.getElementById("q"+i).value)
+    }
+
+    let section2 = []
+    for(let i=1;i<=32;i++){
+        section2.push(document.getElementById("p"+i).value)
+    }
+
+    fetch("https://est-jjw7.onrender.com", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            user_id: user.id,
+            section1: section1,
+            section2: section2,
+            images: [
+                img1.value, img2.value, img3.value,
+                img4.value, img5.value, img6.value
+            ],
+            who_am_i: who.value
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert("Total Score: " + data.total)
+        console.log(data)
+    })
+}
+</script>
+
+</body>
+</html>

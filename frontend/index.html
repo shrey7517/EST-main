@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>EST Portal</title>
+</head>
+<body>
+
+<h2>Login</h2>
+
+<input id="email" placeholder="Email"><br><br>
+<input id="password" type="password" placeholder="Password"><br><br>
+
+<button onclick="login()">Login</button>
+
+<p>New user? <a href="register.html">Register</a></p>
+
+<script>
+function login(){
+    fetch("http://localhost:5000/login", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            email: document.getElementById("email").value,
+            password: document.getElementById("password").value
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if(data.role === "student"){
+            localStorage.setItem("user", JSON.stringify(data))
+            window.location = "student.html"
+        }
+        else if(data.role === "admin"){
+            window.location = "admin.html"
+        }
+        else{
+            alert("Login failed")
+        }
+    })
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard</title>
+</head>
+<body>
+
+<h2>Admin Dashboard</h2>
+
+<button onclick="loadResults()">Load Results</button>
+
+<div id="results"></div>
+
+<script>
+function loadResults(){
+    fetch("http://localhost:5000/admin/results")
+    .then(res => res.json())
+    .then(data => {
+
+        let html = ""
+
+        data.forEach(r => {
+            html += `
+                <div style="border:1px solid black; padding:10px; margin:10px;">
+                    <p><b>Result ID:</b> ${r[0]}</p>
+                    <p><b>User ID:</b> ${r[1]}</p>
+                    <p><b>Total Score:</b> ${r[4]}</p>
+
+                    <input id="score_${r[0]}" placeholder="New Score">
+                    <button onclick="updateScore(${r[0]})">Update</button>
+                </div>
+            `
+        })
+
+        document.getElementById("results").innerHTML = html
+    })
+}
+
+function updateScore(id){
+    let newScore = document.getElementById("score_" + id).value
+
+    fetch("http://localhost:5000/admin/edit", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+            id: id,
+            score: newScore
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        alert("Score Updated")
+        loadResults()
+    })
+}
+</script>
+
+</body>
+</html>
