@@ -2,9 +2,17 @@ import json
 import os
 import requests
 from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import firebase_admin
 from firebase_admin import credentials, firestore
+from docx import Document
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 # Initialize Firebase Admin
 firebase_sa_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON")
@@ -39,10 +47,13 @@ app.add_middleware(
 # ---------------- MCQ EVALUATION ----------------
 def evaluate_mcq(answers):
     correct = ['b','b','c','d','a','b','c','a','d','b','c']
+    # TODO: Update weights below. The total must be 16.
+    # As per prompt, specific questions like #8 and #9 have higher weights.
+    weights = [1, 1, 1, 1, 1, 1, 1, 3, 3, 2, 2] # Sum = 16
     score = 0
     for i in range(min(len(answers), len(correct))):
         if str(answers[i]).lower() == correct[i]:
-            score += 1
+            score += weights[i]
     return score
 
 # ---------------- PAIRED EVALUATION ----------------
@@ -53,11 +64,22 @@ def evaluate_paired(answers):
         "B","A","B","A","A","A","B","A",
         "B","A","B","A","B","A","B","A"
     ]
-    score = 0
+    points = 0
     for i in range(min(len(answers), len(correct))):
+        # TODO: Replace with exact mapping where each pair assigns 0, 1, or 2 points for A or B.
+        # Currently defaults to 2 points for the correct answer, 0 for incorrect.
         if str(answers[i]).upper() == correct[i]:
-            score += 1
-    return score
+            points += 2
+            
+    # Final Score Conversion
+    if points <= 25:
+        return 0
+    elif points <= 36:
+        return 1
+    elif points <= 47:
+        return 2
+    else:
+        return 3
 
 # ---------------- DEEPSEEK ----------------
 def call_deepseek(prompt):
@@ -85,7 +107,10 @@ def call_deepseek(prompt):
 def clean_json(text):
     try:
         text = text.replace("```json", "").replace("```", "").strip()
-        return json.loads(text)
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            return parsed
+        return {"total": 0}
     except:
         return {"total": 0}
 
@@ -106,6 +131,8 @@ def evaluate_image(story):
     prompt = f"""
     Evaluate Achievement Motivation Story:
     {story}
+    Based on Achievement Imagery (AI) criteria. 
+    If the story is categorized as "Unrelated Imagery" (UI) or "Task Imagery" (TI), the score must be 0.
     Return JSON: {{"total":0-11}}
     """
     return clean_json(call_deepseek(prompt))
@@ -115,19 +142,30 @@ async def submit_test(request: Request):
     try:
         data = await request.json()
         user_id = data.get("user_id")
+        room_key = data.get("room_key")
         
         mcq_score = evaluate_mcq(data.get("section1", []))
         paired_score = evaluate_paired(data.get("section2", []))
-        who = evaluate_who(data.get("who_am_i", ""))
+        
+        who_text = data.get("who_am_i", "")
+        who = evaluate_who(who_text)
+        if isinstance(who, dict):
+            who["original_text"] = who_text
         
         images_data = data.get("images", [])
-        images_results = [evaluate_image(img) for img in images_data]
+        images_results = []
+        for img_text in images_data:
+            res = evaluate_image(img_text)
+            if isinstance(res, dict):
+                res["original_text"] = img_text
+            images_results.append(res)
         
         total = mcq_score + paired_score + who.get("total", 0) + sum(i.get("total", 0) for i in images_results)
         
         # Save to Firestore
         db.collection("results").add({
             "user_id": user_id,
+            "room_key": room_key,
             "section1": data.get("section1", []),
             "section2": data.get("section2", []),
             "who_am_i": who,
@@ -145,6 +183,77 @@ async def submit_test(request: Request):
         }
     except Exception as e:
         print("Error submitting test", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/generate_room_report/{room_key}")
+async def generate_room_report(room_key: str):
+    try:
+        # Fetch all results for the room
+        results_ref = db.collection("results").where("room_key", "==", room_key)
+        results = results_ref.stream()
+        
+        scores = []
+        mcq_scores = []
+        paired_scores = []
+        trait_counts = {"initiative": 0, "problem_solving": 0, "goal_clarity": 0, "resource_awareness": 0}
+        total_students = 0
+        
+        for doc_snap in results:
+            res = doc_snap.to_dict()
+            total_students += 1
+            scores.append(res.get("total", 0))
+            mcq_scores.append(res.get("mcq_score", 0))
+            paired_scores.append(res.get("paired_score", 0))
+            
+            who = res.get("who_am_i", {})
+            for trait in trait_counts.keys():
+                trait_counts[trait] += who.get(trait, 0)
+                
+        if total_students == 0:
+            raise HTTPException(status_code=404, detail="No results found for this room")
+            
+        avg_score = sum(scores) / total_students
+        avg_mcq = sum(mcq_scores) / total_students
+        avg_paired = sum(paired_scores) / total_students
+        
+        # Build prompt for AI
+        prompt = f"""
+        You are an expert entrepreneurial psychologist and data analyst. Generate a comprehensive cohort analysis report for a group of students based on their aggregate Entrepreneurship Skill Test (EST) results.
+        
+        Cohort Data:
+        - Total Students: {total_students}
+        - Average Total Score: {avg_score:.2f}
+        - Average MCQ Score: {avg_mcq:.2f} (Logical reasoning)
+        - Average Paired Comparison Score: {avg_paired:.2f} (Decision making)
+        
+        Essay Trait Presence (Number of students demonstrating each trait):
+        - Initiative: {trait_counts['initiative']} / {total_students}
+        - Problem Solving: {trait_counts['problem_solving']} / {total_students}
+        - Goal Clarity: {trait_counts['goal_clarity']} / {total_students}
+        - Resource Awareness: {trait_counts['resource_awareness']} / {total_students}
+        
+        Please write a cohesive, 4-5 paragraph executive summary and analysis report assessing this cohort's overall entrepreneurial potential, identifying common strengths, highlighting areas for aggregate improvement, and providing actionable recommendations for educators based on these specific metrics. Do not use markdown syntax in your final output, just plain paragraphs.
+        """
+        
+        # Call AI
+        ai_response = call_deepseek(prompt)
+        
+        # Create Docx
+        doc = Document()
+        doc.add_heading(f"Cohort Analysis Report - Room: {room_key}", 0)
+        doc.add_paragraph(f"Total Students Assessed: {total_students}")
+        doc.add_paragraph(f"Average Cohort Score: {avg_score:.2f}")
+        
+        doc.add_heading("Executive Summary & Psychological Evaluation", 1)
+        doc.add_paragraph(ai_response)
+        
+        file_path = f"/tmp/room_report_{room_key}.docx"
+        doc.save(file_path)
+        
+        return FileResponse(file_path, media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document', filename=f"Room_{room_key}_Analysis_Report.docx")
+        
+    except Exception as e:
+        print("Error generating room report:", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/")
