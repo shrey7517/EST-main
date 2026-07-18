@@ -30,17 +30,44 @@ const Register = () => {
         createdAt: new Date().toISOString()
       });
       
+      // Trigger notification email if registering as an admin
+      if (role === 'admin') {
+        try {
+          await fetch('/api/admin-signup-trigger', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              uid: userCredential.user.uid,
+              name,
+              email
+            })
+          });
+        } catch (apiErr) {
+          console.error("Failed to trigger admin signup notification email:", apiErr);
+        }
+      }
+      
       // Send verification email
-      await sendEmailVerification(userCredential.user);
+      try {
+        await sendEmailVerification(userCredential.user);
+        if (role === 'admin') {
+          alert("Admin account created! An approval request has been sent. Please check your inbox and spam folder to verify your email address.");
+        } else {
+          alert("Account created successfully! Please check your inbox and spam folder to verify your email address before logging in.");
+        }
+      } catch (emailErr) {
+        console.error("Firebase sendEmailVerification failure:", emailErr);
+        if (role === 'admin') {
+          alert("Admin account created, but we could not send a verification email. Details: " + emailErr.message);
+        } else {
+          alert("Account created successfully, but we could not send a verification email. Details: " + emailErr.message);
+        }
+      }
       
       // Sign out the user immediately so they must verify their email before logging in
       await auth.signOut();
-      
-      if (role === 'admin') {
-        alert("Admin account created! An approval request has been sent. Please check your inbox and spam folder to verify your email address.");
-      } else {
-        alert("Account created successfully! Please check your inbox and spam folder to verify your email address before logging in.");
-      }
       
       navigate('/login');
     } catch (err) {

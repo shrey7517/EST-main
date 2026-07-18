@@ -42,7 +42,7 @@ def init_db():
 # ---------------- MCQ EVALUATION ----------------
 def evaluate_mcq(answers):
     # 🔥 Replace with actual answer key
-    correct = ['b','b','c','d','a','b','c','a','d','b','c']
+    correct = ['c', 'a', 'd', 'e', 'd', 'd', 'e', 'c', 'd', 'd', 'd']
 
     score = 0
     for i in range(min(len(answers), len(correct))):

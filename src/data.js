@@ -1,15 +1,15 @@
 export const mcqQuestions = [
-  { q: "1. Success in business mainly depends on:", options: ["Luck", "Hard Work", "Contacts", "Government", "None"] },
-  { q: "2. Profit in business is:", options: ["Bad", "Necessary", "Optional", "Irrelevant", "Unethical"] },
-  { q: "3. Innovation is:", options: ["Waste", "Important", "Risky", "Unneeded", "Optional"] },
-  { q: "4. Time management means:", options: ["Ignoring time", "Planning work", "Delaying", "Random work", "Sleeping"] },
-  { q: "5. Failure should be:", options: ["Avoided", "Learned from", "Ignored", "Feared", "Hidden"] },
-  { q: "6. Business growth depends on:", options: ["Luck", "Effort", "Chance", "Others", "None"] },
-  { q: "7. Decision making should be:", options: ["Delayed", "Quick & smart", "Avoided", "Random", "Emotional"] },
-  { q: "8. Risk in business is:", options: ["Bad", "Necessary", "Avoidable", "Optional", "Useless"] },
-  { q: "9. Entrepreneurs should:", options: ["Wait", "Act", "Delay", "Follow", "Ignore"] },
-  { q: "10. Competition means:", options: ["Fear", "Growth", "Loss", "Problem", "None"] },
-  { q: "11. Success requires:", options: ["Luck", "Planning", "Avoidance", "Waiting", "None"] }
+  { q: "1. Success in business mainly depends on:", options: ["Contacts", "Government", "Hard Work", "Luck", "None"] },
+  { q: "2. Profit in business is:", options: ["Necessary", "Bad", "Optional", "Irrelevant", "Unethical"] },
+  { q: "3. Innovation is:", options: ["Waste", "Risky", "Unneeded", "Important", "Optional"] },
+  { q: "4. Time management means:", options: ["Ignoring time", "Delaying", "Random work", "Sleeping", "Planning work"] },
+  { q: "5. Failure should be:", options: ["Avoided", "Ignored", "Feared", "Learned from", "Hidden"] },
+  { q: "6. Business growth depends on:", options: ["Luck", "Chance", "Others", "Effort", "None"] },
+  { q: "7. Decision making should be:", options: ["Delayed", "Avoided", "Random", "Emotional", "Quick & smart"] },
+  { q: "8. Risk in business is:", options: ["Bad", "Avoidable", "Necessary", "Optional", "Useless"] },
+  { q: "9. Entrepreneurs should:", options: ["Wait", "Delay", "Follow", "Act", "Ignore"] },
+  { q: "10. Competition means:", options: ["Fear", "Loss", "Problem", "Growth", "None"] },
+  { q: "11. Success requires:", options: ["Luck", "Avoidance", "Waiting", "Planning", "None"] }
 ];
 
 export const pairedQuestions = [

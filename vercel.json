@@ -1,6 +1,10 @@
 {
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/api/admin-signup-trigger", "destination": "/api/admin-signup-trigger.js" },
+    { "source": "/api/approve-admin", "destination": "/api/approve-admin.js" },
+    { "source": "/api/submit_test", "destination": "/api/index" },
+    { "source": "/api/generate_room_report/:room_key", "destination": "/api/index" },
+    { "source": "/api", "destination": "/api/index" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

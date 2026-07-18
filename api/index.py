@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import firebase_admin
 from firebase_admin import credentials, firestore
 from docx import Document
+from concurrent.futures import ThreadPoolExecutor
 
 try:
     from dotenv import load_dotenv
@@ -23,15 +24,25 @@ if firebase_sa_json:
         firebase_admin.initialize_app(cred)
     except Exception as e:
         print(f"Error loading Firebase Credentials from env: {e}")
-        firebase_admin.initialize_app()
+        try:
+            firebase_admin.initialize_app()
+        except Exception as fe:
+            print(f"Fallback credentials initialization failed: {fe}")
 else:
     # Fallback to default credentials (for local dev if configured)
     try:
         firebase_admin.initialize_app()
     except ValueError:
-        pass # Already initialized or missing credentials
+        pass # Already initialized
+    except Exception as e:
+        print(f"Default credentials initialization failed: {e}")
 
-db = firestore.client()
+db = None
+try:
+    db = firestore.client()
+except Exception as e:
+    print(f"Firestore Client Initialization Error: {e}")
+    print("Warning: Firestore client is uninitialized. Local database writes will fail until credentials are set.")
 
 app = FastAPI()
 
@@ -46,7 +57,7 @@ app.add_middleware(
 
 # ---------------- MCQ EVALUATION ----------------
 def evaluate_mcq(answers):
-    correct = ['b','b','c','d','a','b','c','a','d','b','c']
+    correct = ['c', 'a', 'd', 'e', 'd', 'd', 'e', 'c', 'd', 'd', 'd']
     # TODO: Update weights below. The total must be 16.
     # As per prompt, specific questions like #8 and #9 have higher weights.
     weights = [1, 1, 1, 1, 1, 1, 1, 3, 3, 2, 2] # Sum = 16
@@ -148,21 +159,29 @@ async def submit_test(request: Request):
         paired_score = evaluate_paired(data.get("section2", []))
         
         who_text = data.get("who_am_i", "")
-        who = evaluate_who(who_text)
+        images_data = data.get("images", [])
+
+        # Evaluate who_am_i and images in parallel (7 concurrent requests max)
+        with ThreadPoolExecutor(max_workers=7) as executor:
+            who_future = executor.submit(evaluate_who, who_text)
+            image_futures = [executor.submit(evaluate_image, img_text) for img_text in images_data]
+            
+            # Resolve future results
+            who = who_future.result()
+            images_results = [future.result() for future in image_futures]
+
         if isinstance(who, dict):
             who["original_text"] = who_text
-        
-        images_data = data.get("images", [])
-        images_results = []
-        for img_text in images_data:
-            res = evaluate_image(img_text)
-            if isinstance(res, dict):
-                res["original_text"] = img_text
-            images_results.append(res)
+            
+        for idx, img_text in enumerate(images_data):
+            if idx < len(images_results) and isinstance(images_results[idx], dict):
+                images_results[idx]["original_text"] = img_text
         
         total = mcq_score + paired_score + who.get("total", 0) + sum(i.get("total", 0) for i in images_results)
         
         # Save to Firestore
+        if db is None:
+            raise Exception("Firestore database client is not initialized. Please verify your service account key or GOOGLE_APPLICATION_CREDENTIALS path in your .env file.")
         db.collection("results").add({
             "user_id": user_id,
             "room_key": room_key,
@@ -189,6 +208,8 @@ async def submit_test(request: Request):
 async def generate_room_report(room_key: str):
     try:
         # Fetch all results for the room
+        if db is None:
+            raise Exception("Firestore database client is not initialized. Please verify your service account key or GOOGLE_APPLICATION_CREDENTIALS path in your .env file.")
         results_ref = db.collection("results").where("room_key", "==", room_key)
         results = results_ref.stream()
         

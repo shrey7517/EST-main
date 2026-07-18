@@ -31,6 +31,7 @@ const AdminDashboard = () => {
 
   // Fetch Rooms created by this admin
   const fetchRooms = async () => {
+    if (!currentUser) return;
     try {
       const q = query(collection(db, 'rooms'), where('admin_id', '==', currentUser.uid));
       const querySnapshot = await getDocs(q);
@@ -55,18 +56,24 @@ const AdminDashboard = () => {
     try {
       const q = query(collection(db, 'results'), where('room_key', '==', selectedRoom));
       const querySnapshot = await getDocs(q);
-      const data = [];
-      for (const docSnap of querySnapshot.docs) {
-        const resultData = docSnap.data();
-        let userName = 'Unknown';
-        try {
-          const userDoc = await getDoc(doc(db, 'users', resultData.user_id));
-          if (userDoc.exists()) userName = userDoc.data().name || userDoc.data().email;
-        } catch (e) {
-          console.error("Error fetching user", e);
-        }
-        data.push({ id: docSnap.id, userName, ...resultData });
-      }
+      
+      // Optimize N+1 sequential fetches using parallel queries
+      const data = await Promise.all(
+        querySnapshot.docs.map(async (docSnap) => {
+          const resultData = docSnap.data();
+          let userName = 'Unknown';
+          try {
+            const userDoc = await getDoc(doc(db, 'users', resultData.user_id));
+            if (userDoc.exists()) {
+              userName = userDoc.data().name || userDoc.data().email;
+            }
+          } catch (e) {
+            console.error("Error fetching user profile for ID " + resultData.user_id + ":", e);
+          }
+          return { id: docSnap.id, userName, ...resultData };
+        })
+      );
+      
       setResults(data);
     } catch (err) {
       console.error('Error fetching results:', err);
@@ -110,7 +117,7 @@ const AdminDashboard = () => {
       setSelectedRoom(key); // Auto-select the new room
     } catch (err) {
       console.error('Error creating room:', err);
-      alert('Failed to create room.');
+      alert('Failed to create room. Details: ' + (err.message || err));
     } finally {
       setCreatingRoom(false);
     }

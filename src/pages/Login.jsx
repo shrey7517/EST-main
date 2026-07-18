@@ -26,8 +26,8 @@ const Login = () => {
       await sendPasswordResetEmail(auth, email);
       setMessage('Password reset email sent! Please check your inbox and spam folder.');
     } catch (err) {
-      console.error('Forgot password error:', err);
-      setError('Failed to send reset email. Please verify your email address.');
+      console.error('Firebase sendPasswordResetEmail failure:', err);
+      setError('Failed to send reset email. Details: ' + err.message);
     } finally {
       setResetLoading(false);
     }
@@ -62,7 +62,11 @@ const Login = () => {
           await signOut(auth);
           return;
         }
-        navigate(role === 'admin' ? '/admin' : '/student');
+        if (role === 'super-admin') {
+          navigate('/super-admin');
+        } else {
+          navigate(role === 'admin' ? '/admin' : '/student');
+        }
       } else {
         navigate('/student');
       }
