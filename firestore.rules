@@ -75,6 +75,11 @@ service cloud.firestore {
       allow delete: if false; // Results are immutable for compliance
     }
 
+    // --- ROOM PARTICIPANTS COLLECTION ---
+    match /room_participants/{participantId} {
+      allow read, write: if isAuthenticated();
+    }
+
     // --- TRIGGER EMAIL (MAIL) COLLECTION ---
     match /mail/{mailId} {
       allow create: if isAuthenticated();

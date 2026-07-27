@@ -180,25 +180,33 @@ async def submit_test(request: Request):
         total = mcq_score + paired_score + who.get("total", 0) + sum(i.get("total", 0) for i in images_results)
         
         # Save to Firestore
-        if db is None:
-            raise Exception("Firestore database client is not initialized. Please verify your service account key or GOOGLE_APPLICATION_CREDENTIALS path in your .env file.")
-        db.collection("results").add({
-            "user_id": user_id,
-            "room_key": room_key,
-            "section1": data.get("section1", []),
-            "section2": data.get("section2", []),
-            "who_am_i": who,
-            "images": images_results,
-            "total": total,
-            "createdAt": firestore.SERVER_TIMESTAMP
-        })
+        db_saved = False
+        if db is not None:
+            try:
+                db.collection("results").add({
+                    "user_id": user_id,
+                    "room_key": room_key,
+                    "student_name": data.get("student_name", ""),
+                    "section1": data.get("section1", []),
+                    "section2": data.get("section2", []),
+                    "who_am_i": who,
+                    "images": images_results,
+                    "total": total,
+                    "createdAt": firestore.SERVER_TIMESTAMP
+                })
+                db_saved = True
+            except Exception as db_err:
+                print("Warning: Failed to save to Firestore from backend:", db_err)
+        else:
+            print("Warning: Firestore client is not initialized. Skipping backend database write.")
         
         return {
             "mcq_score": mcq_score,
             "paired_score": paired_score,
             "who_am_i": who,
             "images": images_results,
-            "total": total
+            "total": total,
+            "db_saved": db_saved
         }
     except Exception as e:
         print("Error submitting test", e)

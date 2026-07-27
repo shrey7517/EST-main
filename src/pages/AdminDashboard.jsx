@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { db, auth } from '../firebase';
-import { collection, getDocs, doc, updateDoc, getDoc, setDoc, query, where } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, getDoc, setDoc, query, where, deleteDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, Download, Loader2, Edit2, Check, Plus, Key, Eye, X, FileText } from 'lucide-react';
+import { LogOut, Download, Loader2, Edit2, Check, Plus, Key, Eye, X, FileText, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const AdminDashboard = () => {
@@ -61,11 +61,11 @@ const AdminDashboard = () => {
       const data = await Promise.all(
         querySnapshot.docs.map(async (docSnap) => {
           const resultData = docSnap.data();
-          let userName = 'Unknown';
+          let userName = resultData.student_name || 'Unknown';
           try {
             const userDoc = await getDoc(doc(db, 'users', resultData.user_id));
             if (userDoc.exists()) {
-              userName = userDoc.data().name || userDoc.data().email;
+              userName = resultData.student_name || userDoc.data().name || userDoc.data().email;
             }
           } catch (e) {
             console.error("Error fetching user profile for ID " + resultData.user_id + ":", e);
@@ -120,6 +120,28 @@ const AdminDashboard = () => {
       alert('Failed to create room. Details: ' + (err.message || err));
     } finally {
       setCreatingRoom(false);
+    }
+  };
+
+  const handleDeleteRoom = async (roomId) => {
+    if (!roomId) return;
+    if (!window.confirm(`Are you sure you want to delete room ${roomId}? This will permanently delete the room key registry. Completed student submissions will remain saved in results.`)) {
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, 'rooms', roomId));
+      alert(`Room ${roomId} deleted successfully.`);
+      
+      const remainingRooms = rooms.filter(r => r.id !== roomId);
+      setRooms(remainingRooms);
+      if (remainingRooms.length > 0) {
+        setSelectedRoom(remainingRooms[0].id);
+      } else {
+        setSelectedRoom('');
+      }
+    } catch (err) {
+      console.error('Error deleting room:', err);
+      alert('Failed to delete room: ' + (err.message || err));
     }
   };
 
@@ -259,6 +281,14 @@ const AdminDashboard = () => {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  {selectedRoom && (
+                    <button
+                      onClick={() => handleDeleteRoom(selectedRoom)}
+                      className="flex items-center gap-2 rounded-lg bg-red-600/90 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-red-500 hover:shadow-[0_0_15px_rgba(239,68,68,0.3)]"
+                    >
+                      <Trash2 size={16} /> Delete Room
+                    </button>
+                  )}
                   <button
                     onClick={handleDownloadAIReport}
                     disabled={!selectedRoom || results.length === 0 || downloadingId === 'room'}

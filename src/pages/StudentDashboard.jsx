@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -5,7 +6,7 @@ import { mcqQuestions, pairedQuestions } from '../data';
 import { useAuth } from '../context/AuthContext';
 import { LogOut, ChevronRight, ChevronLeft, CheckCircle, Key } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { doc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, addDoc, serverTimestamp, query, where, getDocs, setDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import AntiCheat from '../components/AntiCheat';
 
@@ -42,6 +43,8 @@ const StudentDashboard = () => {
 
   // State initialization from localStorage
   const [roomKey, setRoomKey] = useState(progress.roomKey || '');
+  const [studentName, setStudentName] = useState(progress.studentName || '');
+  const [isRoomJoined, setIsRoomJoined] = useState(progress.isRoomJoined || false);
   const [roomError, setRoomError] = useState('');
   const [section1, setSection1] = useState(progress.section1 || Array(11).fill(''));
   const [section2, setSection2] = useState(progress.section2 || Array(32).fill(''));
@@ -50,11 +53,37 @@ const StudentDashboard = () => {
   const [completedSteps, setCompletedSteps] = useState(progress.completedSteps || []);
   const [deadlines, setDeadlines] = useState(progress.deadlines || {});
 
+  // Fetch student name from Firestore users collection on mount/login
+  useEffect(() => {
+    const fetchStudentName = async () => {
+      if (currentUser && !progress.studentName) {
+        let initialName = currentUser.displayName || '';
+        if (!initialName) {
+          try {
+            const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+            if (userDoc.exists() && userDoc.data().name) {
+              initialName = userDoc.data().name;
+            }
+          } catch (e) {
+            console.error("Error fetching student name:", e);
+          }
+        }
+        if (!initialName && currentUser.email) {
+          initialName = currentUser.email.split('@')[0];
+        }
+        setStudentName(initialName);
+      }
+    };
+    fetchStudentName();
+  }, [currentUser]);
+
   // Persist state to localStorage on any change
   useEffect(() => {
     if (!currentUser) return;
     const stateToSave = {
       roomKey,
+      studentName,
+      isRoomJoined,
       section1,
       section2,
       images,
@@ -63,22 +92,22 @@ const StudentDashboard = () => {
       deadlines
     };
     localStorage.setItem(`est_progress_${currentUser.uid}`, JSON.stringify(stateToSave));
-  }, [roomKey, section1, section2, images, whoAmI, completedSteps, deadlines, currentUser]);
+  }, [roomKey, studentName, isRoomJoined, section1, section2, images, whoAmI, completedSteps, deadlines, currentUser]);
 
   // Section Access Control & Redirects (sync with URL step)
   useEffect(() => {
     if (!currentUser) return;
-    
+
     const activeStep = completedSteps.length + 1;
 
-    // 1. If roomKey is verified but user is at step 0, redirect to activeStep
-    if (roomKey && step === 0) {
+    // 1. If room is joined but user is at step 0, redirect to activeStep
+    if (isRoomJoined && step === 0) {
       setSearchParams({ step: String(activeStep) });
       return;
     }
 
-    // 2. If roomKey is NOT verified, and user tries to access step > 0, force step 0
-    if (!roomKey && step > 0) {
+    // 2. If room is NOT joined, and user tries to access step > 0, force step 0
+    if (!isRoomJoined && step > 0) {
       setSearchParams({ step: '0' });
       return;
     }
@@ -93,7 +122,7 @@ const StudentDashboard = () => {
     if (step > activeStep && step <= 4) {
       setSearchParams({ step: String(activeStep) });
     }
-  }, [step, roomKey, completedSteps, setSearchParams, currentUser]);
+  }, [step, isRoomJoined, completedSteps, setSearchParams, currentUser]);
 
   // Timer logic using target deadlines
   const currentDeadline = deadlines[step];
@@ -118,7 +147,7 @@ const StudentDashboard = () => {
   // Countdown execution
   useEffect(() => {
     if (timeLeft === null || completed || loading) return;
-    
+
     if (timeLeft <= 0) {
       if (step < 4) {
         alert("Time's up for this section! Moving to the next one.");
@@ -174,17 +203,65 @@ const StudentDashboard = () => {
     setSearchParams({ step: String(prevStep) });
   };
 
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleJoinRoom(e);
+    }
+  };
+
   const handleJoinRoom = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     setRoomError('');
+
+    const trimmedName = studentName ? studentName.trim() : '';
+    const trimmedKey = roomKey ? roomKey.trim() : '';
+
+    if (!trimmedName) {
+      setRoomError('Please enter your Full Name.');
+      return;
+    }
+
+    if (!trimmedKey) {
+      setRoomError('Please enter a Room Key.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const roomDoc = await getDoc(doc(db, 'rooms', roomKey));
+      const roomDoc = await getDoc(doc(db, 'rooms', trimmedKey));
       if (!roomDoc.exists()) {
         setRoomError('Invalid Room Key. Please check and try again.');
         return;
       }
-      // Room is valid, move to step 1
+
+      const roomData = roomDoc.data();
+      const maxStudents = roomData.expected_students;
+
+      // Query participants for this room
+      const participantsQuery = query(collection(db, 'room_participants'), where('room_key', '==', trimmedKey));
+      const participantsSnap = await getDocs(participantsQuery);
+
+      const alreadyJoined = participantsSnap.docs.some(docSnap => docSnap.data().user_id === currentUser.uid);
+
+      if (maxStudents !== undefined && maxStudents !== null) {
+        if (participantsSnap.size >= maxStudents && !alreadyJoined) {
+          setRoomError(`This room has reached its limit of ${maxStudents} students.`);
+          return;
+        }
+      }
+
+      // Add to room_participants if they haven't already joined
+      if (!alreadyJoined) {
+        await setDoc(doc(db, 'room_participants', `${trimmedKey}_${currentUser.uid}`), {
+          room_key: trimmedKey,
+          user_id: currentUser.uid,
+          joinedAt: new Date().toISOString()
+        });
+      }
+
+      // Room is valid & has capacity, move to step 1
+      setIsRoomJoined(true);
       setSearchParams({ step: '1' });
     } catch (err) {
       console.error(err);
@@ -196,9 +273,10 @@ const StudentDashboard = () => {
 
   const handleSubmit = async () => {
     setLoading(true);
-    
+
     const payload = {
       user_id: currentUser.uid,
+      student_name: studentName,
       room_key: roomKey,
       section1,
       section2,
@@ -230,16 +308,16 @@ const StudentDashboard = () => {
         body: payloadString,
         signal: controller.signal
       });
-      
+
       clearTimeout(timeoutId);
-      
+
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.detail || data.error || `HTTP ${res.status}: Failed to submit test`);
       }
-      
+
       console.log("[Submission Success] Received evaluation from API:", data);
-      
+
       // Clear localStorage progress on success
       localStorage.removeItem(`est_progress_${currentUser.uid}`);
       setTotalScore(data.total);
@@ -258,6 +336,7 @@ const StudentDashboard = () => {
         console.log("[Submission Backup] Writing raw answers directly to Firestore 'results' collection...");
         const backupPayload = {
           user_id: currentUser.uid,
+          student_name: studentName,
           room_key: roomKey,
           section1,
           section2,
@@ -272,24 +351,24 @@ const StudentDashboard = () => {
 
         const docRef = await addDoc(collection(db, 'results'), backupPayload);
         console.log(`[Submission Backup Success] Raw answers securely saved under Document ID: ${docRef.id}`);
-        
+
         // Clear localStorage progress on backup success
         localStorage.removeItem(`est_progress_${currentUser.uid}`);
-        
+
         setTotalScore("Grading Pending (Offline Mode)");
         setCompleted(true);
         alert("Your exam responses were saved securely via our backup database. Your score is pending review by the administrator.");
 
       } catch (firestoreErr) {
         console.error("[Submission Failsafe Failure] Direct Firestore write also failed!", firestoreErr);
-        
+
         // Log firestore specific rule violations
         if (firestoreErr.code === 'permission-denied') {
           console.error("[Firestore Security Violation] Direct write blocked by security rules. Ensure the results rules match student requirements.");
         } else if (firestoreErr.code === 'unavailable') {
           console.error("[Firestore Network Error] Firebase database service is offline or unavailable.");
         }
-        
+
         alert("Failed to submit assessment due to network errors. Please verify your connection and click submit again. Do not close this window.");
       }
     } finally {
@@ -315,11 +394,10 @@ const StudentDashboard = () => {
                     newS1[idx] = val;
                     setSection1(newS1);
                   }}
-                  className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
-                    section1[idx] === val
+                  className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${section1[idx] === val
                       ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
                       : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                  }`}
+                    }`}
                 >
                   {val}) {opt}
                 </button>
@@ -346,11 +424,10 @@ const StudentDashboard = () => {
                   newS2[idx] = 'A';
                   setSection2(newS2);
                 }}
-                className={`rounded-lg p-3 text-left text-sm transition-all ${
-                  section2[idx] === 'A'
+                className={`rounded-lg p-3 text-left text-sm transition-all ${section2[idx] === 'A'
                     ? 'bg-emerald-600 text-white border-transparent'
                     : 'bg-slate-900 border border-slate-700 text-slate-300 hover:border-slate-500'
-                }`}
+                  }`}
               >
                 A) {item.A}
               </button>
@@ -360,11 +437,10 @@ const StudentDashboard = () => {
                   newS2[idx] = 'B';
                   setSection2(newS2);
                 }}
-                className={`rounded-lg p-3 text-left text-sm transition-all ${
-                  section2[idx] === 'B'
+                className={`rounded-lg p-3 text-left text-sm transition-all ${section2[idx] === 'B'
                     ? 'bg-emerald-600 text-white border-transparent'
                     : 'bg-slate-900 border border-slate-700 text-slate-300 hover:border-slate-500'
-                }`}
+                  }`}
               >
                 B) {item.B}
               </button>
@@ -421,7 +497,7 @@ const StudentDashboard = () => {
   if (step === 0) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-900 p-4">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-800/50 p-8 shadow-2xl backdrop-blur-xl text-center"
@@ -431,31 +507,47 @@ const StudentDashboard = () => {
           </div>
           <h2 className="mb-2 text-2xl font-bold text-white">Join a Room</h2>
           <p className="mb-8 text-slate-400">Enter the Room Key provided by your Admin to begin the test.</p>
-          
+
           {roomError && (
             <div className="mb-4 rounded-lg bg-red-500/10 p-3 text-sm text-red-400 border border-red-500/20">
               {roomError}
             </div>
           )}
 
-          <form onSubmit={handleJoinRoom} className="space-y-4">
-            <input
-              type="text"
-              required
-              className="w-full rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3 text-center text-lg tracking-widest text-white placeholder-slate-500 outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-              placeholder="ENTER KEY"
-              value={roomKey}
-              onChange={(e) => setRoomKey(e.target.value)}
-            />
+          <form onSubmit={handleJoinRoom} className="space-y-4 text-left">
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-slate-400">Full Name</label>
+              <input
+                type="text"
+                required
+                className="w-full rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3 text-white placeholder-slate-500 outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                placeholder="Enter your full name"
+                value={studentName}
+                onChange={(e) => setStudentName(e.target.value)}
+                onKeyDown={handleKeyDown}
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-slate-400">Room Key</label>
+              <input
+                type="text"
+                required
+                className="w-full rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3 text-center text-lg tracking-widest text-white placeholder-slate-500 outline-none transition-all focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                placeholder="ENTER KEY"
+                value={roomKey}
+                onChange={(e) => setRoomKey(e.target.value)}
+                onKeyDown={handleKeyDown}
+              />
+            </div>
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-indigo-600 px-4 py-3 font-semibold text-white transition-all hover:bg-indigo-500 disabled:opacity-50"
+              className="w-full rounded-lg bg-indigo-600 px-4 py-3 mt-2 font-semibold text-white transition-all hover:bg-indigo-500 disabled:opacity-50"
             >
               {loading ? 'Verifying...' : 'Enter Room'}
             </button>
           </form>
-          
+
           <button
             onClick={handleLogout}
             className="mt-6 text-sm text-slate-500 hover:text-slate-300 transition-colors"
@@ -470,7 +562,7 @@ const StudentDashboard = () => {
   if (completed) {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
-        <motion.div 
+        <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           className="w-full max-w-lg rounded-2xl border border-white/10 bg-white/5 p-12 text-center shadow-2xl backdrop-blur-xl"
@@ -525,19 +617,17 @@ const StudentDashboard = () => {
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="flex flex-1 items-center">
                 <div
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 transition-all ${
-                    step >= i
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 transition-all ${step >= i
                       ? 'border-indigo-500 bg-indigo-500/20 text-indigo-300'
                       : 'border-slate-700 bg-slate-800 text-slate-500'
-                  }`}
+                    }`}
                 >
                   {i}
                 </div>
                 {i < 4 && (
                   <div
-                    className={`mx-4 h-1 flex-1 rounded-full transition-all ${
-                      step > i ? 'bg-indigo-500' : 'bg-slate-800'
-                    }`}
+                    className={`mx-4 h-1 flex-1 rounded-full transition-all ${step > i ? 'bg-indigo-500' : 'bg-slate-800'
+                      }`}
                   />
                 )}
               </div>
@@ -570,7 +660,7 @@ const StudentDashboard = () => {
             >
               <ChevronLeft size={20} /> Previous
             </button>
-            
+
             {step < 4 ? (
               <button
                 onClick={handleNext}
