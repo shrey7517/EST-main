@@ -22,9 +22,11 @@ const Register = () => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
+      const finalName = name.trim() || userCredential.user.displayName || userCredential.user.email.split('@')[0];
+
       // Create user document in Firestore
       await setDoc(doc(db, 'users', userCredential.user.uid), {
-        name,
+        name: finalName,
         email,
         role: role === 'admin' ? 'pending_admin' : 'student',
         createdAt: new Date().toISOString()
@@ -33,15 +35,15 @@ const Register = () => {
       // Trigger notification email if registering as an admin
       if (role === 'admin') {
         try {
-          await fetch('/api/admin-signup-trigger', {
+          await fetch('/api/admin-request', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
               uid: userCredential.user.uid,
-              name,
-              email
+              name: finalName,
+              email: userCredential.user.email
             })
           });
         } catch (apiErr) {
@@ -128,7 +130,7 @@ const Register = () => {
               required
               autoComplete="name"
               className="w-full rounded-lg border border-slate-700 bg-slate-900/50 px-4 py-3 text-white placeholder-slate-500 outline-none transition-all focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-              placeholder="John Doe"
+              placeholder=""
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
