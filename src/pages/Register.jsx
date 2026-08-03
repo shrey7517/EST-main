@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { auth, db } from '../firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { UserPlus } from 'lucide-react';
@@ -33,19 +33,41 @@ const Register = () => {
       });
       
       // Trigger notification email if registering as an admin
+      let adminRequestEmailSent = false;
       if (role === 'admin') {
         try {
-          await fetch('/api/admin-request', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
+          const superAdminEmail = import.meta.env.VITE_SUPER_ADMIN_EMAIL;
+          if (!superAdminEmail) {
+            throw new Error('VITE_SUPER_ADMIN_EMAIL is missing from environment configuration.');
+          }
+
+          await addDoc(collection(db, 'mail'), {
+            to: [superAdminEmail],
+            message: {
+              subject: `Admin Access Request: ${finalName}`,
+              html: `
+                <h2>Admin Access Request</h2>
+                <p>A new user has registered and requested administrator access.</p>
+                <p><strong>Name:</strong> ${finalName}</p>
+                <p><strong>Email:</strong> ${userCredential.user.email}</p>
+                <p><strong>User UID:</strong> ${userCredential.user.uid}</p>
+                <p>Open the Super-Admin Approval Portal and approve or reject this pending admin request.</p>
+              `,
+              text: [
+                'Admin Access Request',
+                '',
+                'A new user has registered and requested administrator access.',
+                `Name: ${finalName}`,
+                `Email: ${userCredential.user.email}`,
+                `User UID: ${userCredential.user.uid}`,
+                '',
+                'Open the Super-Admin Approval Portal and approve or reject this pending admin request.'
+              ].join('\n')
             },
-            body: JSON.stringify({
-              uid: userCredential.user.uid,
-              name: finalName,
-              email: userCredential.user.email
-            })
+            createdAt: serverTimestamp()
           });
+
+          adminRequestEmailSent = true;
         } catch (apiErr) {
           console.error("Failed to trigger admin signup notification email:", apiErr);
         }
@@ -55,7 +77,11 @@ const Register = () => {
       try {
         await sendEmailVerification(userCredential.user);
         if (role === 'admin') {
-          alert("Admin account created! An approval request has been sent. Please check your inbox and spam folder to verify your email address.");
+          if (adminRequestEmailSent) {
+            alert("Admin account created! An approval request has been sent. Please check your inbox and spam folder to verify your email address.");
+          } else {
+            alert("Admin account created, but the approval request email was not sent. Ask the super-admin to check the pending approvals page.");
+          }
         } else {
           alert("Account created successfully! Please check your inbox and spam folder to verify your email address before logging in.");
         }

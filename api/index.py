@@ -92,27 +92,40 @@ def evaluate_paired(answers):
     else:
         return 3
 
-# ---------------- DEEPSEEK ----------------
-def call_deepseek(prompt):
-    api_key = os.environ.get("DEEPSEEK_API_KEY", "sk-aee4748505a344689e59b5f8d0fc4f48") # Used hardcoded key as fallback
+# ---------------- NVIDIA AI ----------------
+def call_nvidia_model(prompt, temperature=0.3, max_tokens=4096):
+    api_key = os.environ.get("NVIDIA_API_KEY")
+    if not api_key:
+        print("NVIDIA_API_KEY is not configured")
+        return json.dumps({"total": 0})
+
+    model = os.environ.get("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash")
     try:
-        url = "https://api.deepseek.com/v1/chat/completions"
+        url = "https://integrate.api.nvidia.com/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
         data = {
-            "model": "deepseek-chat",
+            "model": model,
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.3
+            "temperature": temperature,
+            "top_p": 0.95,
+            "max_tokens": max_tokens,
+            "chat_template_kwargs": {
+                "thinking": True,
+                "reasoning_effort": "high"
+            }
         }
         response = requests.post(url, headers=headers, json=data, timeout=30)
+        response.raise_for_status()
         result = response.json()
         if "choices" not in result:
             return json.dumps({"total": 0})
-        return result["choices"][0]["message"]["content"]
+        message = result["choices"][0].get("message", {})
+        return message.get("content") or json.dumps({"total": 0})
     except Exception as e:
-        print("DeepSeek Error:", e)
+        print("NVIDIA AI Error:", e)
         return json.dumps({"total": 0})
 
 def clean_json(text):
@@ -134,7 +147,7 @@ def evaluate_who(essay):
     Based on Initiative, Problem Solving, Goal Clarity, Resource Awareness.
     Return JSON: {{"initiative":0/1, "problem_solving":0/1, "goal_clarity":0/1, "resource_awareness":0/1, "total":0-4}}
     """
-    return clean_json(call_deepseek(prompt))
+    return clean_json(call_nvidia_model(prompt))
 
 def evaluate_image(story):
     if not story or len(story) < 10:
@@ -146,7 +159,7 @@ def evaluate_image(story):
     If the story is categorized as "Unrelated Imagery" (UI) or "Task Imagery" (TI), the score must be 0.
     Return JSON: {{"total":0-11}}
     """
-    return clean_json(call_deepseek(prompt))
+    return clean_json(call_nvidia_model(prompt))
 
 @app.post("/api/submit_test")
 async def submit_test(request: Request):
@@ -189,6 +202,8 @@ async def submit_test(request: Request):
                     "student_name": data.get("student_name", ""),
                     "section1": data.get("section1", []),
                     "section2": data.get("section2", []),
+                    "mcq_score": mcq_score,
+                    "paired_score": paired_score,
                     "who_am_i": who,
                     "images": images_results,
                     "total": total,
@@ -265,7 +280,7 @@ async def generate_room_report(room_key: str):
         """
         
         # Call AI
-        ai_response = call_deepseek(prompt)
+        ai_response = call_nvidia_model(prompt, temperature=1, max_tokens=16384)
         
         # Create Docx
         doc = Document()

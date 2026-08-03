@@ -38,8 +38,16 @@ module.exports = async (req, res) => {
     const rejectUrl = `${baseUrl}/api/approve-admin?uid=${uid}&token=${token}&action=reject`;
     const dashboardUrl = `${baseUrl}/super-admin`;
 
-    const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || 'superadmin@example.com';
+    const superAdminEmail = process.env.SUPER_ADMIN_EMAIL;
     const resendApiKey = process.env.RESEND_API_KEY;
+
+    if (!superAdminEmail) {
+      throw new Error('SUPER_ADMIN_EMAIL is missing from environment configuration.');
+    }
+
+    if (!resendApiKey) {
+      throw new Error('RESEND_API_KEY is missing from environment configuration.');
+    }
 
     // Send email using Resend API (fetch-based to avoid NPM dependencies)
     const emailBody = {
@@ -110,22 +118,18 @@ module.exports = async (req, res) => {
       `
     };
 
-    if (resendApiKey) {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(emailBody)
-      });
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(emailBody)
+    });
 
-      const resData = await response.json();
-      if (!response.ok) {
-        throw new Error(resData.message || 'Failed to send email via Resend');
-      }
-    } else {
-      console.log("Mock Email Sent (No RESEND_API_KEY):", emailBody);
+    const resData = await response.json();
+    if (!response.ok) {
+      throw new Error(resData.message || 'Failed to send email via Resend');
     }
 
     res.status(200).json({ success: true, message: 'Approval notification sent to Super Admin' });

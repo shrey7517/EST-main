@@ -68,32 +68,45 @@ def evaluate_paired(answers):
 
     return score
 
-# ---------------- DEEPSEEK ----------------
-def call_deepseek(prompt):
+# ---------------- NVIDIA AI ----------------
+def call_nvidia_model(prompt):
+    api_key = os.environ.get("NVIDIA_API_KEY")
+    if not api_key:
+        print("NVIDIA_API_KEY is not configured")
+        return json.dumps({"total": 0})
+
     try:
-        url = "https://api.deepseek.com/v1/chat/completions"
+        url = "https://integrate.api.nvidia.com/v1/chat/completions"
 
         headers = {
-            "Authorization": f"Bearer {os.environ.get('DEEPSEEK_API_KEY')}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
 
         data = {
-            "model": "deepseek-chat",
+            "model": os.environ.get("NVIDIA_MODEL", "deepseek-ai/deepseek-v4-flash"),
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.3
+            "temperature": 0.3,
+            "top_p": 0.95,
+            "max_tokens": 4096,
+            "chat_template_kwargs": {
+                "thinking": True,
+                "reasoning_effort": "high"
+            }
         }
 
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, headers=headers, json=data, timeout=30)
+        response.raise_for_status()
         result = response.json()
 
         if "choices" not in result:
             return json.dumps({"total": 0})
 
-        return result["choices"][0]["message"]["content"]
+        message = result["choices"][0].get("message", {})
+        return message.get("content") or json.dumps({"total": 0})
 
     except Exception as e:
-        print("DeepSeek Error:", e)
+        print("NVIDIA AI Error:", e)
         return json.dumps({"total": 0})
 
 def clean_json(text):
@@ -125,7 +138,7 @@ def evaluate_who(essay):
         "total":0-4
     }}
     """
-    return clean_json(call_deepseek(prompt))
+    return clean_json(call_nvidia_model(prompt))
 
 def evaluate_image(story):
     prompt = f"""
@@ -138,7 +151,7 @@ def evaluate_image(story):
         "total":0-11
     }}
     """
-    return clean_json(call_deepseek(prompt))
+    return clean_json(call_nvidia_model(prompt))
 
 # ---------------- REPORT ----------------
 def generate_report(user_id, mcq_score, paired_score, who, images, total):
@@ -332,8 +345,5 @@ def export_excel():
 if __name__ == "__main__":
     init_db()
 
-    # SET YOUR KEY HERE
-    os.environ["DEEPSEEK_API_KEY"] = "sk-aee4748505a344689e59b5f8d0fc4f48"
-
-   port = int(os.environ.get("PORT", 5000))
-app.run(host="0.0.0.0", port=port)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
